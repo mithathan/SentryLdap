@@ -2,6 +2,8 @@
 
 SentryLdap is a fork of Cartalyst Sentry library. Added new features like ldap authentication.SentryLdap is a PHP 5.3+ fully-featured authentication & authorization system. It also provides additional features such as user groups and additional security features.
 
+This branch works with Laravel 4.0*
+
 Sentry is a framework agnostic set of interfaces with default implementations, though you can substitute any implementations you see fit.
 
 [![Build Status](https://travis-ci.org/cartalyst/sentry.png?branch=master)](https://travis-ci.org/cartalyst/sentry)
