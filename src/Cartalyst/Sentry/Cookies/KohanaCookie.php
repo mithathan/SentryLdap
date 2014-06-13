@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Sessions;
+<?php namespace Cartalyst\Sentry\Cookies;
 /**
  * Part of the Sentry package.
  *
@@ -18,35 +18,23 @@
  * @link       http://cartalyst.com
  */
 
-use CI_Session as Session;
 
-class CISession implements SessionInterface {
-
-	/**
-	 * The CodeIgniter session driver.
-	 *
-	 * @param  CI_Session
-	 */
-	protected $store;
+class KohanaCookie implements CookieInterface {
 
 	/**
-	 * The key used in the Session.
+	 * The key used in the Cookie.
 	 *
 	 * @var string
 	 */
 	protected $key = 'cartalyst_sentry';
 
 	/**
-	 * Creates a new CodeIgniter Session driver for Sentry.
+	 * Create a new Kohana cookie instance for Sentry.
 	 *
-	 * @param  \CI_Session  $store
 	 * @param  string  $key
-	 * @return void
 	 */
-	public function __construct(Session $store, $key = null)
+	public function __construct($key = null)
 	{
-		$this->store = $store;
-
 		if (isset($key))
 		{
 			$this->key = $key;
@@ -54,7 +42,7 @@ class CISession implements SessionInterface {
 	}
 
 	/**
-	 * Returns the session key.
+	 * Returns the cookie key.
 	 *
 	 * @return string
 	 */
@@ -64,34 +52,48 @@ class CISession implements SessionInterface {
 	}
 
 	/**
-	 * Put a value in the Sentry session.
+	 * Put a value in the Sentry cookie.
+	 *
+	 * @param  mixed  $value
+	 * @param  int    $minutes
+	 * @return void
+	 */
+	public function put($value, $minutes)
+	{
+		\Cookie::set($this->getKey(), serialize($value), $minutes * 60);
+	}
+
+	/**
+	 * Put a value in the Sentry cookie forever.
 	 *
 	 * @param  mixed  $value
 	 * @return void
 	 */
-	public function put($value)
+	public function forever($value)
 	{
-		$this->store->set_userdata($this->getkey(), serialize($value));
+		// Forever can set a cookie for 5 years.
+		// This should suffice "forever".
+		$this->put($value, 2628000);
 	}
 
 	/**
-	 * Get the Sentry session value.
+	 * Get the Sentry cookie value.
 	 *
 	 * @return mixed
 	 */
 	public function get()
 	{
-		return unserialize($this->store->userdata($this->getKey()));
+		return unserialize(\Cookie::get($this->getKey()));
 	}
 
 	/**
-	 * Remove the Sentry session.
+	 * Remove the Sentry cookie.
 	 *
 	 * @return void
 	 */
 	public function forget()
 	{
-		$this->store->unset_userdata($this->getKey());
+		\Cookie::delete($this->getKey());
 	}
 
 }

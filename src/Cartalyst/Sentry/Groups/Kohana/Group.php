@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Groups\Eloquent;
+<?php namespace Cartalyst\Sentry\Groups\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -21,24 +21,51 @@
 use Cartalyst\Sentry\Groups\NameRequiredException;
 use Cartalyst\Sentry\Groups\GroupExistsException;
 use Cartalyst\Sentry\Groups\GroupInterface;
-use Illuminate\Database\Eloquent\Model;
 
-class Group extends Model implements GroupInterface {
+class Group extends \ORM implements GroupInterface {
 
 	/**
 	 * The table associated with the model.
 	 *
 	 * @var string
 	 */
-	protected $table = 'groups';
+	protected $_table_name = 'groups';
 
 	/**
-	 * The attributes that aren't mass assignable.
-	 *
+	 * This model belongs to a user
 	 * @var array
 	 */
-	protected $guarded = array();
+	protected $_belongs_to = array('user' => array('model' => 'User'));
 
+	/**
+	 * auto-set the updated_at column
+	 * @var array
+	 */
+	protected $_updated_column = array('column' => 'updated_at', 'format' => 'Y-m-d H:i:s');
+
+	/**
+	 * Auto-set the created_at column
+	 * @var array
+	 */
+	protected $_created_column = array('column' => 'created_at', 'format' => 'Y-m-d H:i:s');
+
+	/**
+	 * @var array Make sure permissions are serialized when storing them
+	 */
+	protected $_serialize_columns = array('permissions');
+
+	/*
+	 * Support Kohana's validation
+	 */
+	public function rules()
+	{
+		return array (
+			'name' => array (
+				array ('not_empty'),
+				array (array($this, 'unique_key_exists'), array (':value', 'name'))
+			)
+		);
+	}
 	/**
 	 * Allowed permissions values.
 	 *
@@ -51,27 +78,13 @@ class Group extends Model implements GroupInterface {
 	protected $allowedPermissionsValues = array(0, 1);
 
 	/**
-	 * The Eloquent user model.
-	 *
-	 * @var string
-	 */
-	protected static $userModel = 'Cartalyst\Sentry\Users\Eloquent\User';
-
-	/**
-	 * The user groups pivot table name.
-	 *
-	 * @var string
-	 */
-	protected static $userGroupsPivot = 'users_groups';
-
-	/**
 	 * Returns the group's ID.
 	 *
 	 * @return mixed
 	 */
 	public function getId()
 	{
-		return $this->getKey();
+		return $this->pk();
 	}
 
 	/**
@@ -109,7 +122,7 @@ class Group extends Model implements GroupInterface {
 	{
 		$groupPermissions = $this->getPermissions();
 
-		if ( ! is_array($permissions))
+		if ( ! is_array($permissions) )
 		{
 			$permissions = (array) $permissions;
 		}
@@ -123,7 +136,7 @@ class Group extends Model implements GroupInterface {
 			// Now, let's check if the permission ends in a wildcard "*" symbol.
 			// If it does, we'll check through all the merged permissions to see
 			// if a permission exists which matches the wildcard.
-			if ((strlen($permission) > 1) and ends_with($permission, '*'))
+			if ((strlen($permission) > 1) and \Text::ends_with($permission, '*'))
 			{
 				$matched = false;
 
@@ -134,7 +147,7 @@ class Group extends Model implements GroupInterface {
 
 					// We will make sure that the merged permission does not
 					// exactly match our permission, but starts with it.
-					if ($checkPermission != $groupPermission and starts_with($groupPermission, $checkPermission) and $value == 1)
+					if ($checkPermission != $groupPermission and \Text::starts_with($groupPermission, $checkPermission) and $value == 1)
 					{
 						$matched = true;
 						break;
@@ -145,7 +158,7 @@ class Group extends Model implements GroupInterface {
 			// Now, let's check if the permission starts in a wildcard "*" symbol.
 			// If it does, we'll check through all the merged permissions to see
 			// if a permission exists which matches the wildcard.
-			elseif ((strlen($permission) > 1) and starts_with($permission, '*'))
+			elseif ((strlen($permission) > 1) and \Text::starts_with($permission, '*'))
 			{
 				$matched = false;
 
@@ -156,7 +169,7 @@ class Group extends Model implements GroupInterface {
 
 					// We will make sure that the merged permission does not
 					// exactly match our permission, but ends with it.
-					if ($checkPermission != $groupPermission and ends_with($groupPermission, $checkPermission) and $value == 1)
+					if ($checkPermission != $groupPermission and \Text::ends_with($groupPermission, $checkPermission) and $value == 1)
 					{
 						$matched = true;
 						break;
@@ -171,7 +184,7 @@ class Group extends Model implements GroupInterface {
 				foreach ($groupPermissions as $groupPermission => $value)
 				{
 					// This time check if the groupPermission ends in wildcard "*" symbol.
-					if ((strlen($groupPermission) > 1) and ends_with($groupPermission, '*'))
+					if ((strlen($groupPermission) > 1) and \Text::ends_with($groupPermission, '*'))
 					{
 						$matched = false;
 
@@ -179,8 +192,8 @@ class Group extends Model implements GroupInterface {
 						$checkGroupPermission = substr($groupPermission, 0, -1);
 
 						// We will make sure that the merged permission does not
-						// exactly match our permission, but starts wtih it.
-						if ($checkGroupPermission != $permission and starts_with($permission, $checkGroupPermission) and $value == 1)
+						// exactly match our permission, but starts with it.
+						if ($checkGroupPermission != $permission and \Text::starts_with($permission, $checkGroupPermission) and $value == 1)
 						{
 							$matched = true;
 							break;
@@ -210,8 +223,12 @@ class Group extends Model implements GroupInterface {
 			}
 		}
 
-		return $all;
-		
+		if ($all === false)
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -227,65 +244,24 @@ class Group extends Model implements GroupInterface {
 	}
 
 	/**
-	 * Returns the relationship between groups and users.
-	 *
-	 * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
-	 */
-	public function users()
-	{
-		return $this->belongsToMany(static::$userModel, static::$userGroupsPivot);
-	}
-
-	/**
-	 * Set the Eloquent model to use for user relationships.
-	 *
-	 * @param  string  $model
-	 * @return void
-	 */
-	public static function setUserModel($model)
-	{
-		static::$userModel = $model;
-	}
-
-	/**
-	 * Set the user groups pivot table name.
-	 *
-	 * @param  string  $tableName
-	 * @return void
-	 */
-	public static function setUserGroupsPivot($tableName)
-	{
-		static::$userGroupsPivot = $tableName;
-	}
-
-	/**
-	 * Saves the group.
-	 *
-	 * @param  array  $options
-	 * @return bool
-	 */
-	public function save(array $options = array())
-	{
-		$this->validate();
-		return parent::save();
-	}
-
-	/**
 	 * Delete the group.
 	 *
 	 * @return bool
 	 */
 	public function delete()
 	{
-		$this->users()->detach();
+		\DB::delete('users_groups')
+			->where('group_id', '=', $this->pk())
+			->execute($this->_db);
+
 		return parent::delete();
 	}
 
 	/**
 	 * Mutator for giving permissions.
 	 *
-	 * @param  mixed $permissions
-	 * @return array
+	 * @param  mixed  $permissions
+	 * @return array  $_permissions
 	 * @throws \InvalidArgumentException
 	 */
 	public function getPermissionsAttribute($permissions)
@@ -336,29 +312,13 @@ class Group extends Model implements GroupInterface {
 			}
 		}
 
-		$this->attributes['permissions'] = ( ! empty($permissions)) ? json_encode($permissions) : '';
-	}
-
-	/**
-	 * Convert the model instance to an array.
-	 *
-	 * @return array
-	 */
-	public function toArray()
-	{
-		$attributes = parent::toArray();
-
-		if (isset($attributes['permissions']))
-		{
-			$attributes['permissions'] = $this->getPermissionsAttribute($attributes['permissions']);
-		}
-
-		return $attributes;
+		$this->attributes['permissions'] = ( ! empty($permissions)) ? $permissions : '';
 	}
 
 	/**
 	 * Validates the group and throws a number of
 	 * Exceptions if validation fails.
+	 *
 	 *
 	 * @return bool
 	 * @throws \Cartalyst\Sentry\Groups\NameRequiredException
@@ -367,16 +327,17 @@ class Group extends Model implements GroupInterface {
 	public function validate()
 	{
 		// Check if name field was passed
-		if ( ! $name = $this->name)
+		$name = $this->name;
+
+		if ( empty($name) )
 		{
 			throw new NameRequiredException("A name is required for a group, none given.");
 		}
 
 		// Check if group already exists
-		$query = $this->newQuery();
-		$persistedGroup = $query->where('name', '=', $name)->first();
+		$persistedGroup = $this->unique_key_exists($name, 'name');
 
-		if ($persistedGroup and $persistedGroup->getId() != $this->getId())
+		if (! $persistedGroup)
 		{
 			throw new GroupExistsException("A group already exists with name [$name], names must be unique for groups.");
 		}
@@ -384,4 +345,22 @@ class Group extends Model implements GroupInterface {
 		return true;
 	}
 
+	/**
+	 * Tests if a unique key value exists in the database.
+	 *
+	 * @param   mixed  $value  the value to test
+	 * @param   string $field  field name
+	 * @return  boolean
+	 */
+	public function unique_key_exists($value, $field)
+	{
+		$total = \DB::select(array(\DB::expr('COUNT(*)'), 'total_count'))
+			->from($this->_table_name)
+			->where($field, '=', $value)
+			->where($this->_primary_key, '!=', $this->pk())
+			->execute()
+			->get('total_count');
+
+		return ($total == 0);
+	}
 }

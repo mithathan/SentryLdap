@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Groups\Eloquent;
+<?php namespace Cartalyst\Sentry\Groups\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -29,7 +29,7 @@ class Provider implements ProviderInterface {
 	 *
 	 * @var string
 	 */
-	protected $model = 'Cartalyst\Sentry\Groups\Eloquent\Group';
+	protected $model = 'Group';
 
 	/**
 	 * Create a new Eloquent Group provider.
@@ -56,7 +56,9 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		if ( ! $group = $model->newQuery()->find($id))
+		$group = $model->where('id', '=', $id)->find();
+
+		if ( ! $group->loaded() )
 		{
 			throw new GroupNotFoundException("A group could not be found with ID [$id].");
 		}
@@ -75,7 +77,9 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		if ( ! $group = $model->newQuery()->where('name', '=', $name)->first())
+		$group = $model->where('name', '=', $name)->find();
+
+		if ( ! $group->loaded() )
 		{
 			throw new GroupNotFoundException("A group could not be found with the name [$name].");
 		}
@@ -92,7 +96,7 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		return $model->newQuery()->get()->all();
+		return $model->find_all();
 	}
 
 	/**
@@ -103,22 +107,26 @@ class Provider implements ProviderInterface {
 	 */
 	public function create(array $attributes)
 	{
+		if ( ! isset($credentials['permissions']) )
+		{
+			$credentials['permissions'] = array();
+		}
+
 		$group = $this->createModel();
-		$group->fill($attributes);
+		$group->values($attributes, array('name', 'permissions'));
 		$group->save();
+
 		return $group;
 	}
 
 	/**
 	 * Create a new instance of the model.
 	 *
-	 * @return \Illuminate\Database\Eloquent\Model
+	 * @return \ORM
 	 */
 	public function createModel()
 	{
-		$class = '\\'.ltrim($this->model, '\\');
-
-		return new $class;
+		return \ORM::factory($this->model);
 	}
 
 	/**

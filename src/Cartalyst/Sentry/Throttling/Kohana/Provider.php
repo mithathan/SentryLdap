@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Throttling\Eloquent;
+<?php namespace Cartalyst\Sentry\Throttling\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -26,17 +26,17 @@ use Cartalyst\Sentry\Users\UserInterface;
 class Provider implements ProviderInterface {
 
 	/**
-	 * The Eloquent throttle model.
+	 * The ORM throttle model.
 	 *
 	 * @var string
 	 */
-	protected $model = 'Cartalyst\Sentry\Throttling\Eloquent\Throttle';
+	protected $model = 'Throttle';
 
 	/**
 	 * The user provider used for finding users
 	 * to attach throttles to.
 	 *
-	 * @var \Cartalyst\Sentry\Users\UserInterface
+	 * @var \Cartalyst\Sentry\Users\ProviderInterface
 	 */
 	protected $userProvider;
 
@@ -50,7 +50,7 @@ class Provider implements ProviderInterface {
 	/**
 	 * Creates a new throttle provider.
 	 *
-	 * @param \Cartalyst\Sentry\Users\ProviderInterface $userProvider
+	 * @param  \Cartalyst\Sentry\Users\ProviderInterface $userProvider
 	 * @param  string $model
 	 * @return void
 	 */
@@ -65,35 +65,35 @@ class Provider implements ProviderInterface {
 	}
 
 	/**
-	 * Finds a throttler by the given Model.
+	 * Finds a throttler by the given user ID.
 	 *
-	 * @param  \Cartalyst\Sentry\Users\UserInterface $user
+	 * @param  mixed   $id
 	 * @param  string  $ipAddress
 	 * @return \Cartalyst\Sentry\Throttling\ThrottleInterface
 	 */
 	public function findByUser(UserInterface $user, $ipAddress = null)
 	{
 		$model = $this->createModel();
-		$query = $model->where('user_id', '=', ($userId = $user->getId()));
+		$query = $model->where('user_id', '=', ($user_id = $user->id));
 
 		if ($ipAddress)
 		{
-			$query->where(function($query) use ($ipAddress) {
-				$query->where('ip_address', '=', $ipAddress);
-				$query->orWhere('ip_address', '=', NULL);
-			});
+			$query->where('ip_address', '=', $ipAddress);
 		}
 
-		if ( ! $throttle = $query->first())
+		$throttle = $query->find();
+
+		if ( ! $throttle->loaded() )
 		{
 			$throttle = $this->createModel();
-			$throttle->user_id = $userId;
+			$throttle->user_id = $user_id;
 			if ($ipAddress) $throttle->ip_address = $ipAddress;
 			$throttle->save();
 		}
 
 		return $throttle;
 	}
+
 	/**
 	 * Finds a throttler by the given user ID.
 	 *
@@ -151,13 +151,11 @@ class Provider implements ProviderInterface {
 	/**
 	 * Create a new instance of the model.
 	 *
-	 * @return \Illuminate\Database\Eloquent\Model
+	 * @return \ORM
 	 */
 	public function createModel()
 	{
-		$class = '\\'.ltrim($this->model, '\\');
-
-		return new $class;
+		return \ORM::factory($this->model);
 	}
 
 	/**

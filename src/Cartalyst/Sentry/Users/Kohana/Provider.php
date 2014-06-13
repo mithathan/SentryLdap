@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Users\Eloquent;
+<?php namespace Cartalyst\Sentry\Users\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -29,11 +29,11 @@ use Cartalyst\Sentry\Users\WrongPasswordException;
 class Provider implements ProviderInterface {
 
 	/**
-	 * The Eloquent user model.
+	 * The ORM user model.
 	 *
 	 * @var string
 	 */
-	protected $model = 'Cartalyst\Sentry\Users\Eloquent\User';
+	protected $model = 'User';
 
 	/**
 	 * The hasher for the model.
@@ -43,7 +43,7 @@ class Provider implements ProviderInterface {
 	protected $hasher;
 
 	/**
-	 * Create a new Eloquent User provider.
+	 * Create a new ORM User provider.
 	 *
 	 * @param  \Cartalyst\Sentry\Hashing\HasherInterface  $hasher
 	 * @param  string  $model
@@ -72,7 +72,9 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		if ( ! $user = $model->newQuery()->find($id))
+		$user = $model->where('id', '=', $id)->find();
+
+		if ( ! $user->loaded() )
 		{
 			throw new UserNotFoundException("A user could not be found with ID [$id].");
 		}
@@ -91,7 +93,9 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		if ( ! $user = $model->newQuery()->where($model->getLoginName(), '=', $login)->first())
+		$user = $model->where($model->getLoginName(), '=', $login)->find();
+
+		if ( ! $user->loaded() )
 		{
 			throw new UserNotFoundException("A user could not be found with a login value of [$login].");
 		}
@@ -118,7 +122,7 @@ class Provider implements ProviderInterface {
 
 		$passwordName = $model->getPasswordName();
 
-		$query              = $model->newQuery();
+		$query              = $model;
 		$hashableAttributes = $model->getHashableAttributes();
 		$hashedCredentials  = array();
 
@@ -136,8 +140,9 @@ class Provider implements ProviderInterface {
 				$query = $query->where($credential, '=', $value);
 			}
 		}
+		$user = $query->find();
 
-		if ( ! $user = $query->first())
+		if ( ! $user->loaded() )
 		{
 			throw new UserNotFoundException("A user was not found with the given credentials.");
 		}
@@ -155,17 +160,6 @@ class Provider implements ProviderInterface {
 				}
 
 				throw new UserNotFoundException($message);
-			}
-			else if ($credential == $passwordName)
-			{
-				if (method_exists($this->hasher, 'needsRehashed') && 
-					$this->hasher->needsRehashed($user->{$credential}))
-				{
-					// The algorithm used to create the hash is outdated and insecure.
-					// Rehash the password and save.
-					$user->{$credential} = $value;
-					$user->save();
-				}
 			}
 		}
 
@@ -190,14 +184,16 @@ class Provider implements ProviderInterface {
 
 		$model = $this->createModel();
 
-		$result = $model->newQuery()->where('activation_code', '=', $code)->get();
+		$result = $model->where('activation_code', '=', $code)->get();
 
 		if (($count = $result->count()) > 1)
 		{
 			throw new \RuntimeException("Found [$count] users with the same activation code.");
 		}
 
-		if ( ! $user = $result->first())
+		 $user = $result->find();
+
+		if ( !$user->loaded() )
 		{
 			throw new UserNotFoundException("A user was not found with the given activation code.");
 		}
@@ -217,14 +213,16 @@ class Provider implements ProviderInterface {
 	{
 		$model = $this->createModel();
 
-		$result = $model->newQuery()->where('reset_password_code', '=', $code)->get();
+		$result = $model->where('reset_password_code', '=', $code)->get();
 
 		if (($count = $result->count()) > 1)
 		{
 			throw new \RuntimeException("Found [$count] users with the same reset password code.");
 		}
 
-		if ( ! $user = $result->first())
+		$user = $result->find();
+
+		if ( ! $user->loaded() )
 		{
 			throw new UserNotFoundException("A user was not found with the given reset password code.");
 		}
@@ -233,13 +231,13 @@ class Provider implements ProviderInterface {
 	}
 
 	/**
-	 * Returns an array containing all users.
+	 * Returns an all users.
 	 *
 	 * @return array
 	 */
 	public function findAll()
 	{
-		return $this->createModel()->newQuery()->get()->all();
+		return $this->createModel()->find_all();
 	}
 
 	/**
@@ -251,7 +249,10 @@ class Provider implements ProviderInterface {
 	 */
 	public function findAllInGroup(GroupInterface $group)
 	{
-		return $group->users()->get();
+		return array_filter($this->findAll(), function($user) use ($group)
+		{
+			return $user->inGroup($group);
+		});
 	}
 
 	/**
@@ -292,8 +293,13 @@ class Provider implements ProviderInterface {
 	 */
 	public function create(array $credentials)
 	{
+		if ( ! isset($credentials['permissions']) )
+		{
+			$credentials['permissions'] = array();
+		}
+
 		$user = $this->createModel();
-		$user->fill($credentials);
+		$user->values($credentials);
 		$user->save();
 
 		return $user;
@@ -316,9 +322,7 @@ class Provider implements ProviderInterface {
 	 */
 	public function createModel()
 	{
-		$class = '\\'.ltrim($this->model, '\\');
-
-		return new $class;
+		return \ORM::factory($this->model);
 	}
 
 	/**
@@ -340,10 +344,7 @@ class Provider implements ProviderInterface {
 	 */
 	public function setupHasherWithModel()
 	{
-		if (method_exists($this->model, 'setHasher'))
-		{
-			forward_static_call_array(array($this->model, 'setHasher'), array($this->hasher));
-		}
+		\Model_User::setHasher($this->hasher);
 	}
 
 }

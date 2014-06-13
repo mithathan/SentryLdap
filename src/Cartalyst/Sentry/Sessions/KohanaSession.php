@@ -18,14 +18,12 @@
  * @link       http://cartalyst.com
  */
 
-use CI_Session as Session;
-
-class CISession implements SessionInterface {
+class KohanaSession implements SessionInterface {
 
 	/**
-	 * The CodeIgniter session driver.
+	 * The Kohana session driver.
 	 *
-	 * @param  CI_Session
+	 * @param  Kohana_Session
 	 */
 	protected $store;
 
@@ -37,17 +35,17 @@ class CISession implements SessionInterface {
 	protected $key = 'cartalyst_sentry';
 
 	/**
-	 * Creates a new CodeIgniter Session driver for Sentry.
+	 * Creates a new Kohana Session driver for Sentry.
 	 *
-	 * @param  \CI_Session  $store
+	 * @param  \Session  $store
 	 * @param  string  $key
 	 * @return void
 	 */
-	public function __construct(Session $store, $key = null)
+	public function __construct(\Session $store, $key = null)
 	{
 		$this->store = $store;
 
-		if (isset($key))
+		if ( isset($key) )
 		{
 			$this->key = $key;
 		}
@@ -71,7 +69,7 @@ class CISession implements SessionInterface {
 	 */
 	public function put($value)
 	{
-		$this->store->set_userdata($this->getkey(), serialize($value));
+		$this->store->set($this->getkey(), serialize($value));
 	}
 
 	/**
@@ -81,7 +79,7 @@ class CISession implements SessionInterface {
 	 */
 	public function get()
 	{
-		return unserialize($this->store->userdata($this->getKey()));
+		return unserialize($this->store->get($this->getKey()));
 	}
 
 	/**
@@ -91,7 +89,7 @@ class CISession implements SessionInterface {
 	 */
 	public function forget()
 	{
-		$this->store->unset_userdata($this->getKey());
+		$this->store->delete($this->getKey());
 	}
 
 }

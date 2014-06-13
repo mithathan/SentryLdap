@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Throttling\Eloquent;
+<?php namespace Cartalyst\Sentry\Throttling\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -21,10 +21,9 @@
 use Cartalyst\Sentry\Throttling\ThrottleInterface;
 use Cartalyst\Sentry\Throttling\UserSuspendedException;
 use Cartalyst\Sentry\Throttling\UserBannedException;
-use Illuminate\Database\Eloquent\Model;
 use DateTime;
 
-class Throttle extends Model implements ThrottleInterface {
+class Throttle extends \ORM implements ThrottleInterface {
 
 	/**
 	 * Throttling status.
@@ -38,7 +37,12 @@ class Throttle extends Model implements ThrottleInterface {
 	 *
 	 * @var string
 	 */
-	protected $table = 'throttle';
+	protected $_table_name = 'throttle';
+
+	/**
+	 * @var array Define belogst to relation
+	 */
+	protected $_belongs_to = array('user' => array('model' => 'User'));
 
 	/**
 	 * Indicates if the model should be timestamped.
@@ -53,14 +57,6 @@ class Throttle extends Model implements ThrottleInterface {
 	 * @var array
 	 */
 	protected $guarded = array();
-
-	/**
-	 * The Eloquent user model.
-	 *
-	 * @var string
-	 */
-	protected static $userModel = 'Cartalyst\Sentry\Users\Eloquent\User';
-
 
 	/**
 	 * Attempt limit.
@@ -83,7 +79,7 @@ class Throttle extends Model implements ThrottleInterface {
 	 */
 	public function getUser()
 	{
-		return $this->user()->getResults();
+		return $this->user;
 	}
 
 	/**
@@ -119,7 +115,7 @@ class Throttle extends Model implements ThrottleInterface {
 	public function addLoginAttempt()
 	{
 		$this->attempts++;
-		$this->last_attempt_at = $this->freshTimeStamp();
+		$this->last_attempt_at = new DateTime;
 
 		if ($this->getLoginAttempts() >= static::$attemptLimit)
 		{
@@ -166,7 +162,7 @@ class Throttle extends Model implements ThrottleInterface {
 		if ( ! $this->suspended)
 		{
 			$this->suspended    = true;
-			$this->suspended_at = $this->freshTimeStamp();
+			$this->suspended_at = new DateTime;
 			$this->save();
 		}
 	}
@@ -214,7 +210,7 @@ class Throttle extends Model implements ThrottleInterface {
 		if ( ! $this->banned)
 		{
 			$this->banned = true;
-			$this->banned_at = $this->freshTimeStamp();
+			$this->banned_at = new DateTime;
 			$this->save();
 		}
 	}
@@ -247,11 +243,12 @@ class Throttle extends Model implements ThrottleInterface {
 	/**
 	 * Check user throttle status.
 	 *
+	 * @param \Validation $extra_validation
 	 * @return bool
 	 * @throws \Cartalyst\Sentry\Throttling\UserBannedException
 	 * @throws \Cartalyst\Sentry\Throttling\UserSuspendedException
 	 */
-	public function check()
+	public function check(\Validation $extra_validation = NULL)
 	{
 		if ($this->isBanned())
 		{
@@ -260,8 +257,7 @@ class Throttle extends Model implements ThrottleInterface {
 				$this->getUser()->getLogin()
 			));
 		}
-
-		if ($this->isSuspended())
+		else if ($this->isSuspended())
 		{
 			throw new UserSuspendedException(sprintf(
 				'User [%s] has been suspended.',
@@ -269,29 +265,7 @@ class Throttle extends Model implements ThrottleInterface {
 			));
 		}
 
-		return true;
-	}
-
-	/**
-	 * Set the Eloquent model to use for user relationships.
-	 *
-	 * @param  string  $model
-	 * @return void
-	 */
-	public static function setUserModel($model)
-	{
-		static::$userModel = $model;
-	}
-
-
-	/**
-	 * User relationship for the throttle.
-	 *
-	 * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-	 */
-	public function user()
-	{
-		return $this->belongsTo(static::$userModel, 'user_id');
+		return parent::check($extra_validation);
 	}
 
 	/**
@@ -304,7 +278,7 @@ class Throttle extends Model implements ThrottleInterface {
 	 */
 	public function clearLoginAttemptsIfAllowed()
 	{
-		$lastAttempt = clone $this->last_attempt_at;
+		$lastAttempt = new DateTime($this->last_attempt_at);
 
 		$suspensionTime  = static::$suspensionTime;
 		$clearAttemptsAt = $lastAttempt->modify("+{$suspensionTime} minutes");
@@ -330,7 +304,7 @@ class Throttle extends Model implements ThrottleInterface {
 	 */
 	public function removeSuspensionIfAllowed()
 	{
-		$suspended = clone $this->suspended_at;
+		$suspended = new DateTime($this->suspended_at);
 
 		$suspensionTime = static::$suspensionTime;
 		$unsuspendAt    = $suspended->modify("+{$suspensionTime} minutes");
@@ -368,43 +342,16 @@ class Throttle extends Model implements ThrottleInterface {
 		return (bool) $banned;
 	}
 
-	/**
-	 * Get the attributes that should be converted to dates.
-	 *
-	 * @return array
-	 */
-	public function getDates()
+	public function set($column, $value)
 	{
-		return array_merge(parent::getDates(), array('last_attempt_at', 'suspended_at', 'banned_at'));
-	}
+		$dates = array('last_attempt_at', 'suspended_at', 'banned_at');
 
-	/**
-	 * Convert the model instance to an array.
-	 *
-	 * @return array
-	 */
-	public function toArray()
-	{
-		$result = parent::toArray();
-
-		if (isset($result['suspended']))
+		if (in_array($column, $dates) and is_a($value, 'DateTime'))
 		{
-			$result['suspended'] = $this->getSuspendedAttribute($result['suspended']);
-		}
-		if (isset($result['banned']))
-		{
-			$result['banned'] = $this->getBannedAttribute($result['banned']);
-		}
-		if (isset($result['last_attempt_at']) and $result['last_attempt_at'] instanceof DateTime)
-		{
-			$result['last_attempt_at'] = $result['last_attempt_at']->format('Y-m-d H:i:s');
-		}
-		if (isset($result['suspended_at']) and $result['suspended_at'] instanceof DateTime)
-		{
-			$result['suspended_at'] = $result['suspended_at']->format('Y-m-d H:i:s');
+			$value = $value->format('Y-m-d H:i:s');
 		}
 
-		return $result;
+		return parent::set($column, $value);
 	}
 
 	/**
@@ -440,7 +387,7 @@ class Throttle extends Model implements ThrottleInterface {
 	/**
 	 * Get suspension time.
 	 *
-	 * @return  int
+	 * @return int
 	 */
 	public static function getSuspensionTime()
 	{

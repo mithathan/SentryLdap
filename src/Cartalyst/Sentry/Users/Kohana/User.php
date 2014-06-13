@@ -1,4 +1,4 @@
-<?php namespace Cartalyst\Sentry\Users\Eloquent;
+<?php namespace Cartalyst\Sentry\Users\Kohana;
 /**
  * Part of the Sentry package.
  *
@@ -18,7 +18,6 @@
  * @link       http://cartalyst.com
  */
 
-use Illuminate\Database\Eloquent\Model;
 use Cartalyst\Sentry\Groups\GroupInterface;
 use Cartalyst\Sentry\Hashing\HasherInterface;
 use Cartalyst\Sentry\Users\LoginRequiredException;
@@ -28,37 +27,64 @@ use Cartalyst\Sentry\Users\UserExistsException;
 use Cartalyst\Sentry\Users\UserInterface;
 use DateTime;
 
-class User extends Model implements UserInterface {
+class User extends \ORM implements UserInterface {
 
 	/**
 	 * The table associated with the model.
 	 *
 	 * @var string
 	 */
-	protected $table = 'users';
+	protected $_table_name = 'users';
 
 	/**
-	 * The attributes that should be hidden for arrays.
-	 *
+	 * @var array Make sure permissions are serialized when storing them
+	 */
+	protected $_serialize_columns = array('permissions');
+
+	/**
+	 * auto-set the updated_at column
 	 * @var array
 	 */
-	protected $hidden = array(
-		'password',
-		'reset_password_code',
-		'activation_code',
-		'persist_code',
+	protected $_updated_column = array ('column' => 'updated_at', 'format' => 'Y-m-d H:i:s');
+
+	/**
+	 * Auto-set the created_at column
+	 * @var array
+	 */
+	protected $_created_column = array ('column' => 'created_at', 'format' => 'Y-m-d H:i:s');
+
+	/**
+	 * Define the has many relation(s)
+	 * @var array
+	 */
+	protected $_has_many = array (
+		'groups' => array ('model' => 'Group', 'through' => 'users_groups')
 	);
 
 	/**
-	 * The attributes that aren't mass assignable.
-	 *
+	 * Define has one relation(s)
 	 * @var array
 	 */
-	protected $guarded = array(
-		'reset_password_code',
-		'activation_code',
-		'persist_code',
+	protected $_has_one = array (
+		'throttle' => array ('model' => 'Throttle')
 	);
+
+	/*
+	 * Support Kohana's validation
+	 */
+	public function rules()
+	{
+		return array (
+			'email' => array (
+				array ('not_empty'),
+				array ('email'),
+				array (array ($this, 'unique_key_exists'), array (':value', 'email'))
+			),
+			'password' => array (
+				array('not_empty')
+			)
+		);
+	}
 
 	/**
 	 * Attributes that should be hashed.
@@ -111,27 +137,13 @@ class User extends Model implements UserInterface {
 	protected $mergedPermissions;
 
 	/**
-	 * The Eloquent group model.
-	 *
-	 * @var string
-	 */
-	protected static $groupModel = 'Cartalyst\Sentry\Groups\Eloquent\Group';
-
-	/**
-	 * The user groups pivot table name.
-	 *
-	 * @var string
-	 */
-	protected static $userGroupsPivot = 'users_groups';
-
-	/**
 	 * Returns the user's ID.
 	 *
 	 * @return  mixed
 	 */
 	public function getId()
 	{
-		return $this->getKey();
+		return $this->pk();
 	}
 
 	/**
@@ -277,45 +289,28 @@ class User extends Model implements UserInterface {
 	 * Exceptions if validation fails.
 	 *
 	 * @return bool
-	 * @throws \Cartalyst\Sentry\Users\LoginRequiredException
-	 * @throws \Cartalyst\Sentry\Users\PasswordRequiredException
-	 * @throws \Cartalyst\Sentry\Users\UserExistsException
+	 * @throws \ORM_Validation_Exception
 	 */
 	public function validate()
 	{
-		if ( ! $login = $this->{static::$loginAttribute})
-		{
-			throw new LoginRequiredException("A login is required for a user, none given.");
-		}
-
-		if ( ! $password = $this->getPassword())
-		{
-			throw new PasswordRequiredException("A password is required for user [$login], none given.");
-		}
-
-		// Check if the user already exists
-		$query = $this->newQuery();
-		$persistedUser = $query->where($this->getLoginName(), '=', $login)->first();
-
-		if ($persistedUser and $persistedUser->getId() != $this->getId())
-		{
-			throw new UserExistsException("A user already exists with login [$login], logins must be unique for users.");
-		}
-
-		return true;
+		return $this->check();
 	}
 
-	/**
-	 * Saves the user.
-	 *
-	 * @param  array  $options
-	 * @return bool
-	 */
-	public function save(array $options = array())
+	public function set($column, $value)
 	{
-		$this->validate();
+		$dates = array('activated_at', 'last_login');
 
-		return parent::save($options);
+		if (in_array($column, $dates) and is_a($value, 'DateTime'))
+		{
+			$value = $value->format('Y-m-d H:i:s');
+		}
+		// Hash required fields when necessary
+		else if (in_array($column, $this->hashableAttributes) and ! empty($value))
+		{
+			$value = $this->hash($value);
+		}
+
+		parent::set($column, $value);
 	}
 
 	/**
@@ -325,7 +320,14 @@ class User extends Model implements UserInterface {
 	 */
 	public function delete()
 	{
-		$this->groups()->detach();
+		//remove all related groups
+		$this->remove('groups');
+
+		//remove the throttle
+		\DB::delete('throttle')
+			->where('user_id', '=', $this->pk())
+			->execute($this->_db);
+
 		return parent::delete();
 	}
 
@@ -487,7 +489,7 @@ class User extends Model implements UserInterface {
 	{
 		if ( ! $this->userGroups)
 		{
-			$this->userGroups = $this->groups()->get();
+			$this->userGroups = $this->groups->find_all();
 		}
 
 		return $this->userGroups;
@@ -503,8 +505,7 @@ class User extends Model implements UserInterface {
 	{
 		if ( ! $this->inGroup($group))
 		{
-			$this->groups()->attach($group);
-			$this->userGroups = null;
+			$this->add('groups', $group);
 		}
 
 		return true;
@@ -520,8 +521,7 @@ class User extends Model implements UserInterface {
 	{
 		if ($this->inGroup($group))
 		{
-			$this->groups()->detach($group);
-			$this->userGroups = null;
+			$this->remove('groups', $group);
 		}
 
 		return true;
@@ -535,15 +535,7 @@ class User extends Model implements UserInterface {
 	 */
 	public function inGroup(GroupInterface $group)
 	{
-		foreach ($this->getGroups() as $_group)
-		{
-			if ($_group->getId() == $group->getId())
-			{
-				return true;
-			}
-		}
-
-		return false;
+		return $this->has('groups', $group);
 	}
 
 	/**
@@ -627,7 +619,7 @@ class User extends Model implements UserInterface {
 			// Now, let's check if the permission ends in a wildcard "*" symbol.
 			// If it does, we'll check through all the merged permissions to see
 			// if a permission exists which matches the wildcard.
-			if ((strlen($permission) > 1) and ends_with($permission, '*'))
+			if ((strlen($permission) > 1) and \Text::ends_with($permission, '*'))
 			{
 				$matched = false;
 
@@ -638,7 +630,7 @@ class User extends Model implements UserInterface {
 
 					// We will make sure that the merged permission does not
 					// exactly match our permission, but starts with it.
-					if ($checkPermission != $mergedPermission and starts_with($mergedPermission, $checkPermission) and $value == 1)
+					if ($checkPermission != $mergedPermission and \Text::starts_with($mergedPermission, $checkPermission) and $value == 1)
 					{
 						$matched = true;
 						break;
@@ -646,7 +638,7 @@ class User extends Model implements UserInterface {
 				}
 			}
 
-			elseif ((strlen($permission) > 1) and starts_with($permission, '*'))
+			elseif ((strlen($permission) > 1) and \Text::starts_with($permission, '*'))
 			{
 				$matched = false;
 
@@ -657,7 +649,7 @@ class User extends Model implements UserInterface {
 
 					// We will make sure that the merged permission does not
 					// exactly match our permission, but ends with it.
-					if ($checkPermission != $mergedPermission and ends_with($mergedPermission, $checkPermission) and $value == 1)
+					if ($checkPermission != $mergedPermission and \Text::ends_with($mergedPermission, $checkPermission) and $value == 1)
 					{
 						$matched = true;
 						break;
@@ -672,7 +664,7 @@ class User extends Model implements UserInterface {
 				foreach ($mergedPermissions as $mergedPermission => $value)
 				{
 					// This time check if the mergedPermission ends in wildcard "*" symbol.
-					if ((strlen($mergedPermission) > 1) and ends_with($mergedPermission, '*'))
+					if ((strlen($mergedPermission) > 1) and \Text::ends_with($mergedPermission, '*'))
 					{
 						$matched = false;
 
@@ -681,7 +673,7 @@ class User extends Model implements UserInterface {
 
 						// We will make sure that the merged permission does not
 						// exactly match our permission, but starts with it.
-						if ($checkMergedPermission != $permission and starts_with($permission, $checkMergedPermission) and $value == 1)
+						if ($checkMergedPermission != $permission and \Text::starts_with($permission, $checkMergedPermission) and $value == 1)
 						{
 							$matched = true;
 							break;
@@ -743,44 +735,12 @@ class User extends Model implements UserInterface {
 	}
 
 	/**
-	 * Returns the relationship between users and groups.
-	 *
-	 * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
-	 */
-	public function groups()
-	{
-		return $this->belongsToMany(static::$groupModel, static::$userGroupsPivot);
-	}
-
-	/**
-	 * Set the Eloquent model to use for group relationships.
-	 *
-	 * @param  string  $model
-	 * @return void
-	 */
-	public static function setGroupModel($model)
-	{
-		static::$groupModel = $model;
-	}
-
-	/**
-	 * Set the user groups pivot table name.
-	 *
-	 * @param  string  $tableName
-	 * @return void
-	 */
-	public static function setUserGroupsPivot($tableName)
-	{
-		static::$userGroupsPivot = $tableName;
-	}
-
-	/**
 	 * Check string against hashed string.
 	 *
 	 * @param  string  $string
 	 * @param  string  $hashedString
 	 * @return bool
-	 * @throws RuntimeException
+	 * @throws \RuntimeException
 	 */
 	public function checkHash($string, $hashedString)
 	{
@@ -797,7 +757,7 @@ class User extends Model implements UserInterface {
 	 *
 	 * @param  string  $string
 	 * @return string
-	 * @throws RuntimeException
+	 * @throws \RuntimeException
 	 */
 	public function hash($string)
 	{
@@ -810,9 +770,10 @@ class User extends Model implements UserInterface {
 	}
 
 	/**
-	 * Generate a random string.
-	 *
+	 * Generate a random string. If your server has
+	 * @param int $length
 	 * @return string
+	 * @throws \RuntimeException
 	 */
 	public function getRandomString($length = 42)
 	{
@@ -851,62 +812,9 @@ class User extends Model implements UserInterface {
 	}
 
 	/**
-	 * Set a given attribute on the model.
-	 *
-	 * @param  string  $key
-	 * @param  mixed   $value
-	 * @return void
-	 */
-	public function setAttribute($key, $value)
-	{
-		// Hash required fields when necessary
-		if (in_array($key, $this->hashableAttributes) and ! empty($value))
-		{
-			$value = $this->hash($value);
-		}
-
-		return parent::setAttribute($key, $value);
-	}
-
-	/**
-	 * Get the attributes that should be converted to dates.
-	 *
-	 * @return array
-	 */
-	public function getDates()
-	{
-		return array_merge(parent::getDates(), array('activated_at', 'last_login'));
-	}
-
-	/**
-	 * Convert the model instance to an array.
-	 *
-	 * @return array
-	 */
-	public function toArray()
-	{
-		$result = parent::toArray();
-
-		if (isset($result['activated']))
-		{
-			$result['activated'] = $this->getActivatedAttribute($result['activated']);
-		}
-		if (isset($result['permissions']))
-		{
-			$result['permissions'] = $this->getPermissionsAttribute($result['permissions']);
-		}
-		if (isset($result['suspended_at']))
-		{
-			$result['suspended_at'] = $result['suspended_at']->format('Y-m-d H:i:s');
-		}
-
-		return $result;
-	}
-
-	/**
 	 * Sets the hasher for the user.
 	 *
-	 * @param \Cartalyst\Sentry\Hashing\HasherInterface $hasher
+	 * @param \Cartalyst\Sentry\Hashing\HasherInterface  $hasher
 	 * @return void
 	 */
 	public static function setHasher(HasherInterface $hasher)
@@ -953,6 +861,42 @@ class User extends Model implements UserInterface {
 	public static function getLoginAttributeName()
 	{
 		return static::$loginAttribute;
+	}
+
+	/**
+	 * Tests if a unique key value exists in the database.
+	 *
+	 * @param   mixed  $value  the value to test
+	 * @param   string $field  field name
+	 * @return  boolean
+	 */
+	public function unique_key_exists($value, $field = NULL)
+	{
+		if ($field === NULL)
+		{
+			// Automatically determine field by looking at the value
+			$field = $this->unique_key($value);
+		}
+
+		$total = \DB::select(array(\DB::expr('COUNT(*)'), 'total_count'))
+			->from($this->_table_name)
+			->where($field, '=', $value)
+			->where($this->_primary_key, '!=', $this->pk())
+			->execute()
+			->get('total_count');
+
+		return ($total == 0);
+	}
+
+	/**
+	 * Allows a model use both email and username as unique identifiers for login
+	 *
+	 * @param   string $value unique value
+	 * @return  string  field name
+	 */
+	public function unique_key($value)
+	{
+		return \Valid::email($value) ? 'email' : 'username';
 	}
 
 }

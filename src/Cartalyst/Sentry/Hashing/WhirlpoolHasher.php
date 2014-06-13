@@ -18,21 +18,14 @@
  * @link       http://cartalyst.com
  */
 
-class BcryptHasher extends BaseHasher implements HasherInterface {
+class WhirlpoolHasher extends BaseHasher implements HasherInterface {
 
 	/**
-	 * Hash strength.
+	 * Salt Length
 	 *
 	 * @var int
 	 */
-	public $strength = 8;
-
-	/**
-	 * Salt length.
-	 *
-	 * @var int
-	 */
-	public $saltLength = 22;
+	public $saltLength = 16;
 
 	/**
 	 * Hash string.
@@ -42,16 +35,10 @@ class BcryptHasher extends BaseHasher implements HasherInterface {
 	 */
 	public function hash($string)
 	{
-		// Format strength
-		$strength = str_pad($this->strength, 2, '0', STR_PAD_LEFT);
-
 		// Create salt
 		$salt = $this->createSalt();
 
-		//create prefix; $2y$ fixes blowfish weakness
-		$prefix = PHP_VERSION_ID < 50307 ? '$2a$' : '$2y$';
-
-		return crypt($string, $prefix.$strength.'$'.$salt.'$');
+		return $salt.hash('whirlpool', $salt.$string);
 	}
 
 	/**
@@ -63,7 +50,9 @@ class BcryptHasher extends BaseHasher implements HasherInterface {
 	 */
 	public function checkhash($string, $hashedString)
 	{
-		return $this->slowEquals(crypt($string, $hashedString), $hashedString);
+		$salt = substr($hashedString, 0, $this->saltLength);
+
+		return $this->slowEquals($salt.hash('whirlpool', $salt.$string), $hashedString);
 	}
 
 	/**

@@ -23,6 +23,7 @@ use Cartalyst\Sentry\Groups\Eloquent\Provider as GroupProvider;
 use Cartalyst\Sentry\Hashing\BcryptHasher;
 use Cartalyst\Sentry\Hashing\NativeHasher;
 use Cartalyst\Sentry\Hashing\Sha256Hasher;
+use Cartalyst\Sentry\Hashing\WhirlpoolHasher;
 use Cartalyst\Sentry\Sentry;
 use Cartalyst\Sentry\Sessions\IlluminateSession;
 use Cartalyst\Sentry\Throttling\Eloquent\Provider as ThrottleProvider;
@@ -39,8 +40,6 @@ class SentryServiceProvider extends ServiceProvider {
 	public function boot()
 	{
 		$this->package('cartalyst/sentry', 'cartalyst/sentry');
-
-		$this->observeEvents();
 	}
 
 	/**
@@ -51,17 +50,11 @@ class SentryServiceProvider extends ServiceProvider {
 	public function register()
 	{
 		$this->registerHasher();
-
 		$this->registerUserProvider();
-
 		$this->registerGroupProvider();
-
 		$this->registerThrottleProvider();
-
 		$this->registerSession();
-
 		$this->registerCookie();
-
 		$this->registerSentry();
 	}
 
@@ -88,6 +81,10 @@ class SentryServiceProvider extends ServiceProvider {
 
 				case 'sha256':
 					return new Sha256Hasher;
+					break;
+
+				case 'whirlpool':
+					return new WhirlpoolHasher;
 					break;
 			}
 
@@ -139,6 +136,28 @@ class SentryServiceProvider extends ServiceProvider {
 		{
 			$model = $app['config']['cartalyst/sentry::groups.model'];
 
+			// Define the User model to use for relationships.
+			if (method_exists($model, 'setUserModel'))
+			{
+				$userModel = $app['config']['cartalyst/sentry::users.model'];
+
+				forward_static_call_array(
+					array($model, 'setUserModel'),
+					array($userModel)
+				);
+			}
+
+			// Define the user group pivot table name to use for relationships.
+			if (method_exists($model, 'setUserGroupsPivot'))
+			{
+				$pivotTable = $app['config']['cartalyst/sentry::user_groups_pivot_table'];
+
+				forward_static_call_array(
+					array($model, 'setUserGroupsPivot'),
+					array($pivotTable)
+				);
+			}
+
 			return new GroupProvider($model);
 		});
 	}
@@ -179,6 +198,17 @@ class SentryServiceProvider extends ServiceProvider {
 					array($suspensionTime)
 				);
 			}
+			
+			// Define the User model to use for relationships.
+			if (method_exists($model, 'setUserModel'))
+			{
+				$userModel = $app['config']['cartalyst/sentry::users.model'];
+
+				forward_static_call_array(
+					array($model, 'setUserModel'),
+					array($userModel)
+				);
+			}
 
 			return $throttleProvider;
 		});
@@ -194,8 +224,8 @@ class SentryServiceProvider extends ServiceProvider {
 		$this->app['sentry.session'] = $this->app->share(function($app)
 		{
 			$key = $app['config']['cartalyst/sentry::cookie.key'];
-      
-			return new IlluminateSession($app['session'], $key);
+
+			return new IlluminateSession($app['session.store'], $key);
 		});
 	}
 
@@ -209,8 +239,20 @@ class SentryServiceProvider extends ServiceProvider {
 		$this->app['sentry.cookie'] = $this->app->share(function($app)
 		{
 			$key = $app['config']['cartalyst/sentry::cookie.key'];
-      
-			return new IlluminateCookie($app['cookie'], $key);
+
+			/**
+			 * We'll default to using the 'request' strategy, but switch to
+			 * 'jar' if the Laravel version in use is 4.0.*
+			 */
+
+			$strategy = 'request';
+
+			if (preg_match('/^4\.0\.\d*$/D', $app::VERSION))
+			{
+				$strategy = 'jar';
+			}
+
+			return new IlluminateCookie($app['request'], $app['cookie'], $key, $strategy);
 		});
 	}
 
@@ -224,11 +266,6 @@ class SentryServiceProvider extends ServiceProvider {
 	{
 		$this->app['sentry'] = $this->app->share(function($app)
 		{
-			// Once the authentication service has actually been requested by the developer
-			// we will set a variable in the application indicating such. This helps us
-			// know that we need to set any queued cookies in the after event later.
-			$app['sentry.loaded'] = true;
-
 			return new Sentry(
 				$app['sentry.user'],
 				$app['sentry.group'],
@@ -237,24 +274,6 @@ class SentryServiceProvider extends ServiceProvider {
 				$app['sentry.cookie'],
 				$app['request']->getClientIp()
 			);
-		});
-	}
-
-	/**
-	 * Sets up event observations required by Sentry.
-	 *
-	 * @return void
-	 */
-	protected function observeEvents()
-	{
-		// Set the cookie after the app runs
-		$app = $this->app;
-		$this->app->after(function($request, $response) use ($app)
-		{
-			if (isset($app['sentry.loaded']) and $app['sentry.loaded'] == true and ($cookie = $app['sentry.cookie']->getCookie()))
-			{
-				$response->headers->setCookie($cookie);
-			}
 		});
 	}
 
