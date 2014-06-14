@@ -28,7 +28,7 @@ Sentry features
 
 Installation of SentryLdap is very easy. Open your composer.json file and add the following to the require array:
 
-"anndro/sentry_ldap": "2.1.*"
+    "anndro/sentry_ldap": "2.1.*"
 
 to your composer.json file then follow one of the following guides to get SentryLdap working with your favorite framework or on it's own:
 
@@ -62,4 +62,3 @@ Also have Sentry::authenticateWithLdapAndRemember($credentials); function.
 ### Support
 
 We offer support through [our help forums](http://help.cartalyst.com), on [IRC at #cartalyst](http://webchat.freenode.net/?channels=cartalyst) for normal sentry issues, and through GitHub issues (bugs only) for Ldap issues.
-
