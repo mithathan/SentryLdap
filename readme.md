@@ -28,7 +28,7 @@ Sentry features
 
 Installation of SentryLdap is very easy. Open your composer.json file and add the following to the require array:
 
-"anndro/sentry": "2.1.*"
+"anndro/sentry_ldap": "2.1.*"
 
 to your composer.json file then follow one of the following guides to get SentryLdap working with your favorite framework or on it's own:
 
