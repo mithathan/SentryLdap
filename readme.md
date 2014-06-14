@@ -2,11 +2,9 @@
 
 SentryLdap is a fork of Cartalyst Sentry library. Added new features like ldap authentication.SentryLdap is a PHP 5.3+ fully-featured authentication & authorization system. It also provides additional features such as user groups and additional security features.
 
-This branch works with Laravel 4.0*
+This branch works with Laravel 4.2 !
 
 Sentry is a framework agnostic set of interfaces with default implementations, though you can substitute any implementations you see fit.
-
-[![Build Status](https://travis-ci.org/cartalyst/sentry.png?branch=master)](https://travis-ci.org/cartalyst/sentry)
 
 ### Features
 
@@ -28,13 +26,9 @@ Sentry features
 
 ### Installation
 
-Installation of SentryLdap is very easy. Add:
+Installation of SentryLdap is very easy. Open your composer.json file and add the following to the require array:
 
-    "repositories": [
-    {
-        "type":"git",
-        "url":"https://github.com/anndro/SentryLdap.git"
-    }]
+"anndro/sentry": "2.1.*"
 
 to your composer.json file then follow one of the following guides to get SentryLdap working with your favorite framework or on it's own:
 
@@ -55,8 +49,8 @@ After this settings you have to follow sentry orginal document file. You can use
 
     // Set login credentials
     $credentials = array(
-        'userid'    => '03310412183',
-        'password' => 'vnkuseyn',
+        'userid'    => 'demo',
+        'password' => 'demo',
     );
 
     // Try to authenticate the user
@@ -64,10 +58,6 @@ After this settings you have to follow sentry orginal document file. You can use
 
 Also have Sentry::authenticateWithLdapAndRemember($credentials); function.
 
-
-### Upgrading
-
-Is not available yet, I am working on it.
 
 ### Support
 

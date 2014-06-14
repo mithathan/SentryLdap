@@ -1,9 +1,14 @@
 {
-	"name": "cartalyst/sentry",
-	"description": "PHP 5.3+ Fully-featured Authentication & Authorization System",
+	"name": "anndro/sentry_ldap",
+	"description": "PHP 5.3+ Fully-featured Authentication & Authorization System with Ldap",
 	"keywords": ["auth", "security", "laravel", "codeigniter", "fuelphp"],
 	"license": "BSD-3-Clause",
 	"authors": [
+		{
+			"name": "Mucahit Buyukyilmaz",
+			"email": "admin@anndro.com",
+			"role": "Developer"
+		},
 		{
 			"name": "Cartalyst LLC",
 			"email": "help@cartalyst.com"
