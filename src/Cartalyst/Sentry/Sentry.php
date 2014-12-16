@@ -429,6 +429,41 @@ class Sentry {
 	}
 
 	/**
+	 * Logs in the given user and sets properties
+	 * in the session.
+	 *
+	 * @param  Cartalyst\Sentry\Users\UserInterface  $user
+	 * @param  bool  $remember
+	 * @return void
+	 * @throws Cartalyst\Sentry\Users\UserNotActivatedException
+	 */
+	public function loginWithLdap(UserInterface $user, $remember = false)
+	{
+		if ( ! $user->isActivated())
+		{
+			$login = $user->getLogin();
+			throw new UserNotActivatedException("Cannot login user [$login] as they are not activated.");
+		}
+
+		$this->user = $user;
+
+		// Create an array of data to persist to the session and / or cookie
+		$toPersist = array($user->getId(), $user->getPersistCode());
+
+		// Set sessions
+		$this->session->put($toPersist);
+
+		if ($remember)
+		{
+			$this->cookie->forever($toPersist);
+		}
+
+		// The user model can attach any handlers
+		// to the "recordLogin" event.
+		$user->recordLogin();
+	}
+
+	/**
 	 * Alias for logging in and remembering.
 	 *
 	 * @param  \Cartalyst\Sentry\Users\UserInterface  $user

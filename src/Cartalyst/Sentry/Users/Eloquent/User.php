@@ -87,7 +87,7 @@ class User extends Model implements UserInterface {
 	 *
 	 * @var string
 	 */
-	protected static $loginAttribute = 'email';
+	protected static $loginAttribute = 'userid';
 
 	/**
 	 * The hasher the model uses.
@@ -288,10 +288,6 @@ class User extends Model implements UserInterface {
 			throw new LoginRequiredException("A login is required for a user, none given.");
 		}
 
-		if ( ! $password = $this->getPassword())
-		{
-			throw new PasswordRequiredException("A password is required for user [$login], none given.");
-		}
 
 		// Check if the user already exists
 		$query = $this->newQuery();
