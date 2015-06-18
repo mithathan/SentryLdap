@@ -151,11 +151,12 @@ class SentryServiceProvider extends ServiceProvider {
 				);
 			}
 
-			if(!isset(array_get($config,'ldap'))
+			if(!array_get($config,'ldap'))
 				$ldap = null;
 			else
 				$ldap = array_get($config,'ldap');
-			return new UserProvider($app['config']->get('anndro.sentry.hasher'), $model,$ldap);
+			return new UserProvider($this->app['sentry.hasher'], $model,$ldap);
+
 			
 		});
 	}
