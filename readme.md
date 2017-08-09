@@ -28,7 +28,7 @@ Sentry features
 
 Installation of SentryLdap is very easy. Open your composer.json file and add the following to the require array:
 
-    "mithat/sentry_ldap_for_laravel_5": "2.1.*"
+    "mithat/sentry_ldap_for_laravel_5": "2.3.*"
 
 to your composer.json file then follow one of the following guides to get SentryLdap working with your favorite framework.
 
