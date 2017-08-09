@@ -62,7 +62,7 @@
 	},
 	"extra": {
 		"component": "package",
-		"frameworks": ["Laravel 3", "Laravel 4", "Laravel 5" "CodeIgniter 3", "FuelPHP 1"],
+		"frameworks": ["Laravel 3", "Laravel 4", "Laravel 5", "CodeIgniter 3", "FuelPHP 1"],
 		"versions": {
 			"1": "1.1/master",
 			"2": "master"
