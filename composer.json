@@ -1,12 +1,12 @@
 {
-	"name": "anndro/sentry_ldap",
+	"name": "mithat/sentry_ldap_for_laravel_5",
 	"description": "PHP 5.3+ Fully-featured Authentication & Authorization System with Ldap",
 	"keywords": ["auth", "security", "laravel", "codeigniter", "fuelphp"],
 	"license": "BSD-3-Clause",
 	"authors": [
 		{
-			"name": "Mucahit Buyukyilmaz",
-			"email": "admin@anndro.com",
+			"name": "Mithat Rasit Ozcikrikci",
+			"email": "mirasit.oz@gmail.com",
 			"role": "Developer"
 		},
 		{
@@ -62,7 +62,7 @@
 	},
 	"extra": {
 		"component": "package",
-		"frameworks": ["Laravel 3", "Laravel 4", "CodeIgniter 3", "FuelPHP 1"],
+		"frameworks": ["Laravel 3", "Laravel 4", "Laravel 5" "CodeIgniter 3", "FuelPHP 1"],
 		"versions": {
 			"1": "1.1/master",
 			"2": "master"
